@@ -1,5 +1,12 @@
 # syntax=docker/dockerfile:1
-FROM docker/sandbox-templates:claude-code
+
+# Pinned by digest so a rebuild can't silently pick up a different base. This is
+# the multi-arch index digest, so it still resolves per target platform. Refresh
+# it deliberately with:
+#   docker buildx imagetools inspect docker/sandbox-templates:claude-code \
+#     --format '{{.Manifest.Digest}}'
+ARG BASE_IMAGE=docker/sandbox-templates:claude-code@sha256:7fa049b8d7a0cf10f6a4200148ee475e94fc4fb5ef50dfacc4257699cb9a34bc
+FROM ${BASE_IMAGE}
 
 ARG DOTNET_CHANNEL=10.0
 
