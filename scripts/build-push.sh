@@ -145,9 +145,21 @@ resolve_revision() {
 ensure_builder() {
     BUILDER_ARGS=()
 
-    local current_driver
-    current_driver="$(docker buildx inspect 2>/dev/null | awk -F': *' '/^Driver:/ {print $2; exit}')"
-    if [ "${current_driver}" != "docker" ] && [ -n "${current_driver}" ]; then
+    # Probing the selected builder is best-effort: if there isn't one, or it
+    # can't be reached, we just fall through and use our own. Keep the probe
+    # inside an `if` so a non-zero exit can't trip `set -e`, capture the output
+    # in full rather than piping into an awk that exits early (a closed pipe
+    # would SIGPIPE the writer), and keep stderr so a failure explains itself
+    # instead of aborting the script with no diagnostic at all.
+    local inspect_out="" current_driver=""
+    if inspect_out="$(docker buildx inspect 2>&1)"; then
+        current_driver="$(printf '%s\n' "${inspect_out}" | awk -F': *' '/^Driver:/ && !seen {print $2; seen = 1}')"
+    else
+        printf '%s: note: cannot inspect the current buildx builder, falling back to %s:\n%s\n' \
+            "${SCRIPT_NAME}" "${BUILDER}" "${inspect_out}" >&2
+    fi
+
+    if [ -n "${current_driver}" ] && [ "${current_driver}" != "docker" ]; then
         log "Using the current buildx builder (driver: ${current_driver})"
         return 0
     fi
@@ -205,8 +217,8 @@ build_tag() {
 # A push that silently produced a single-platform image would defeat the point.
 verify_platforms() {
     local tag="$1" ref="${IMAGE}:${tag}" platform manifest
-    manifest="$(docker buildx imagetools inspect "${ref}" 2>/dev/null)" \
-        || die "cannot inspect ${ref} after push"
+    manifest="$(docker buildx imagetools inspect "${ref}" 2>&1)" \
+        || die "cannot inspect ${ref} after push: ${manifest}"
 
     local IFS=','
     for platform in ${PLATFORMS}; do
