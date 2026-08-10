@@ -82,11 +82,25 @@ else
     fail=1
 fi
 
-env_file="${BASH_ENV:-/etc/sandbox-persistent.sh}"
-if grep -q "^export ASPNETCORE_Kestrel__Certificates__Default__Password=" "${env_file}" 2>/dev/null; then
-    note "OK   cert password published to ${env_file}"
+# Checked as an exported variable rather than by grepping a file: this shell
+# was started by the image itself, so a set value proves the whole BASH_ENV
+# chain ran -- bootstrap invoked, password file written, and sourced back.
+if [ -n "${ASPNETCORE_Kestrel__Certificates__Default__Password:-}" ]; then
+    note "OK   cert password exported into the shell"
 else
-    note "FAIL cert password missing from ${env_file}"
+    note "FAIL cert password not exported; the BASH_ENV hook did not run"
+    fail=1
+fi
+
+# The hook chains to /etc/sandbox-persistent.sh, which the sandbox manager
+# writes its managed block into at creation. If that chain broke, sandbox
+# credentials would silently vanish, so prove a value written there survives
+# into a later shell.
+printf "export SMOKE_CHAIN_CHECK=chained\n" >> /etc/sandbox-persistent.sh
+if [ "$(bash -c "printf %s \"\${SMOKE_CHAIN_CHECK:-}\"")" = "chained" ]; then
+    note "OK   /etc/sandbox-persistent.sh still sourced"
+else
+    note "FAIL /etc/sandbox-persistent.sh no longer sourced; sandbox env would be lost"
     fail=1
 fi
 

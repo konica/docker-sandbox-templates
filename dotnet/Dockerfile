@@ -17,7 +17,9 @@ ENV DOTNET_ROOT=/usr/share/dotnet \
     ASPNETCORE_HTTP_PORTS=8080 \
     ASPNETCORE_HTTPS_PORTS=8081 \
     ASPNETCORE_Kestrel__Certificates__Default__Path=/home/agent/.aspnet/https/dev-cert.pfx \
-    BASH_ENV=/etc/sandbox-persistent.sh
+    DOTNET_DEV_CERT_ENV_FILE=/home/agent/.aspnet/https/dev-cert.env \
+    BASH_ENV=/usr/local/lib/dotnet-template/bash-env.sh \
+    CLAUDE_ENV_FILE=/usr/local/lib/dotnet-template/bash-env.sh
 
 USER root
 
@@ -34,12 +36,13 @@ RUN apt-get update \
 # dotnet-install.sh exited 0 (#9).
 RUN dotnet --version
 
-# These live outside /home/agent deliberately: the entrypoint depends on
-# ensure-cert.sh, and a sandbox that mounts something over the home directory
-# would otherwise mask the script and stop the container from starting.
+# Outside /home/agent deliberately: the BASH_ENV hook depends on these, and a
+# sandbox that mounts something over the home directory would otherwise mask
+# them.
 COPY ensure-cert.sh /usr/local/bin/ensure-cert.sh
-COPY entrypoint.sh /usr/local/bin/dotnet-template-entrypoint
-RUN chmod 755 /usr/local/bin/ensure-cert.sh /usr/local/bin/dotnet-template-entrypoint
+COPY bash-env.sh /usr/local/lib/dotnet-template/bash-env.sh
+RUN chmod 755 /usr/local/bin/ensure-cert.sh \
+    && chmod 644 /usr/local/lib/dotnet-template/bash-env.sh
 
 USER agent
 WORKDIR /home/agent
@@ -47,7 +50,6 @@ WORKDIR /home/agent
 RUN dotnet tool install --global dotnet-ef
 RUN dotnet ef --version
 
-# Without this the cert bootstrap never runs (#9). Declaring ENTRYPOINT resets
-# the CMD inherited from the base image, so it has to be restated.
-ENTRYPOINT ["/usr/local/bin/dotnet-template-entrypoint"]
-CMD ["claude", "--dangerously-skip-permissions"]
+# ENTRYPOINT and CMD are deliberately left to the base image. Overriding
+# ENTRYPOINT to run the cert bootstrap broke sandbox creation outright, so the
+# bootstrap hangs off BASH_ENV instead (see bash-env.sh).
