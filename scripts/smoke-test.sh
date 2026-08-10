@@ -95,6 +95,18 @@ exit "${fail}"
 
 printf '%s\n' "${output}"
 
+# A template must still boot when the cert bootstrap cannot run. An entrypoint
+# that exited non-zero here made sandboxes uncreatable ("failed to run sandbox
+# container") while every check above still passed, so assert it explicitly:
+# running as a uid that owns nothing makes the bootstrap fail, and the container
+# must start regardless.
+if docker run --rm --user 1001:1001 "${IMAGE}" true >/dev/null 2>&1; then
+    printf 'OK   starts even when the cert bootstrap fails\n'
+else
+    printf 'FAIL image refuses to start when the cert bootstrap fails\n'
+    status=1
+fi
+
 if [ -n "${EXPECTED_MAJOR}" ]; then
     printf '%s\n' "${output}" | grep -Eq "^OK   dotnet ${EXPECTED_MAJOR}\." \
         || die "expected a .NET ${EXPECTED_MAJOR}.x SDK"
