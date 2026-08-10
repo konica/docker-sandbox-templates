@@ -30,9 +30,15 @@ scripts/build-push.sh --skip-smoke-test              # opt out
 
 It asserts `dotnet` and `dotnet ef` run, and that the HTTPS dev cert named by
 `ASPNETCORE_Kestrel__Certificates__Default__Path` exists *after startup* with its
-password published to the environment file. That last check exists because the
-cert bootstrap once shipped in the image without anything invoking it, so every
+password exported into the shell. That last check exists because the cert
+bootstrap once shipped in the image without anything invoking it, so every
 HTTPS app died on boot while the image looked perfectly healthy.
+
+The bootstrap runs from `dotnet/bash-env.sh`, which the image installs as
+`BASH_ENV`/`CLAUDE_ENV_FILE` and which chains to `/etc/sandbox-persistent.sh`.
+`ENTRYPOINT` is deliberately left as the base image defines it: overriding it to
+run the bootstrap broke sandbox creation outright (`failed to run sandbox
+container`), so the image's startup contract is not touched.
 
 ### Tags
 
