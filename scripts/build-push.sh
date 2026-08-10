@@ -33,6 +33,7 @@ BASE_IMAGE="${BASE_IMAGE:-}"
 ALLOW_DIRTY="${ALLOW_DIRTY:-0}"
 PUSH=1
 DRY_RUN=0
+SMOKE_TEST=1
 
 usage() {
     cat <<EOF
@@ -51,6 +52,8 @@ Options:
                             scheduled rebuilds of an unchanged commit.
   --base-image <ref>        Override the base image the Dockerfile pins.
   --allow-dirty             Permit pushing from a dirty working tree.
+  --skip-smoke-test         Don't build and smoke-test a host-platform image
+                            before publishing.
   --dry-run                 Print the buildx commands without running them.
   -h, --help                Show this help.
 
@@ -100,6 +103,7 @@ parse_args() {
             --immutable-suffix) IMMUTABLE_SUFFIX="${2:?--immutable-suffix needs a value}"; shift ;;
             --base-image) BASE_IMAGE="${2:?--base-image needs a value}"; shift ;;
             --allow-dirty) ALLOW_DIRTY=1 ;;
+            --skip-smoke-test) SMOKE_TEST=0 ;;
             --dry-run) DRY_RUN=1 ;;
             -h|--help) usage; exit 0 ;;
             -*) die "unknown option: $1 (try --help)" ;;
@@ -179,6 +183,26 @@ run() {
     "$@"
 }
 
+# An image can build, push and verify its platforms while being functionally
+# empty -- #9 shipped one whose cert bootstrap was wired to nothing. So run the
+# image before publishing it. Only the host platform can be executed here (the
+# other arch would need emulation), which is enough to catch a missing payload;
+# the layers are shared with the multi-arch build that follows, so this mostly
+# comes out of cache.
+smoke_test_tag() {
+    local tag="$1" channel local_ref
+    channel="$(channel_for_tag "${tag}")"
+    local_ref="${IMAGE}:${tag}-smoke"
+
+    log "Smoke-testing ${IMAGE}:${tag} on the host platform"
+    run docker buildx build ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"} \
+        --build-arg "DOTNET_CHANNEL=${channel}" \
+        --tag "${local_ref}" \
+        --load \
+        "${CONTEXT_DIR}"
+    run "${REPO_ROOT}/scripts/smoke-test.sh" "${local_ref}" "${tag}"
+}
+
 build_tag() {
     local tag="$1"
     local channel immutable_tag
@@ -238,6 +262,9 @@ main() {
 
     local tag
     for tag in "${REQUESTED_TAGS[@]}"; do
+        if [ "${SMOKE_TEST}" = "1" ]; then
+            smoke_test_tag "${tag}"
+        fi
         build_tag "${tag}"
     done
 
