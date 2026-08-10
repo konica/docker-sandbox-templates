@@ -30,10 +30,24 @@ RUN apt-get update \
     && rm /tmp/dotnet-install.sh \
     && ln -sf "${DOTNET_ROOT}/dotnet" /usr/bin/dotnet
 
-COPY --chown=agent:agent ensure-cert.sh /home/agent/.local/bin/ensure-cert.sh
-RUN chmod +x /home/agent/.local/bin/ensure-cert.sh
+# Prove the SDK layer produced a working SDK rather than trusting that
+# dotnet-install.sh exited 0 (#9).
+RUN dotnet --version
+
+# These live outside /home/agent deliberately: the entrypoint depends on
+# ensure-cert.sh, and a sandbox that mounts something over the home directory
+# would otherwise mask the script and stop the container from starting.
+COPY ensure-cert.sh /usr/local/bin/ensure-cert.sh
+COPY entrypoint.sh /usr/local/bin/dotnet-template-entrypoint
+RUN chmod 755 /usr/local/bin/ensure-cert.sh /usr/local/bin/dotnet-template-entrypoint
 
 USER agent
 WORKDIR /home/agent
 
 RUN dotnet tool install --global dotnet-ef
+RUN dotnet ef --version
+
+# Without this the cert bootstrap never runs (#9). Declaring ENTRYPOINT resets
+# the CMD inherited from the base image, so it has to be restated.
+ENTRYPOINT ["/usr/local/bin/dotnet-template-entrypoint"]
+CMD ["claude", "--dangerously-skip-permissions"]

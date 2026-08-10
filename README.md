@@ -15,6 +15,25 @@ scripts/build-push.sh --no-push       # build both platforms, publish nothing
 scripts/build-push.sh --dry-run       # print the buildx commands
 ```
 
+### Smoke test
+
+Publishing is gated on actually running the image. `scripts/build-push.sh`
+builds a host-platform image first, runs `scripts/smoke-test.sh` against it, and
+only then builds and pushes the multi-arch tags — so an image whose payload is
+missing or wired to nothing never reaches the registry. The layers are shared,
+so the gate mostly comes out of cache.
+
+```bash
+scripts/smoke-test.sh <image-ref> [expected-major]   # run it by hand
+scripts/build-push.sh --skip-smoke-test              # opt out
+```
+
+It asserts `dotnet` and `dotnet ef` run, and that the HTTPS dev cert named by
+`ASPNETCORE_Kestrel__Certificates__Default__Path` exists *after startup* with its
+password published to the environment file. That last check exists because the
+cert bootstrap once shipped in the image without anything invoking it, so every
+HTTPS app died on boot while the image looked perfectly healthy.
+
 ### Tags
 
 | Tag | Meaning |
