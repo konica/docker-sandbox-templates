@@ -197,6 +197,7 @@ smoke_test_tag() {
     log "Smoke-testing ${IMAGE}:${tag} on the host platform"
     run docker buildx build ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"} \
         --build-arg "DOTNET_CHANNEL=${channel}" \
+        --build-arg "TEMPLATE_REVISION=${REVISION}" \
         --tag "${local_ref}" \
         --load \
         "${CONTEXT_DIR}"
@@ -213,6 +214,7 @@ build_tag() {
         docker buildx build ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"}
         --platform "${PLATFORMS}"
         --build-arg "DOTNET_CHANNEL=${channel}"
+        --build-arg "TEMPLATE_REVISION=${REVISION}"
         --tag "${IMAGE}:${tag}"
         --tag "${IMAGE}:${immutable_tag}"
         --label "org.opencontainers.image.source=${SOURCE_URL}"

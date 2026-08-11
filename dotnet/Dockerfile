@@ -50,6 +50,22 @@ WORKDIR /home/agent
 RUN dotnet tool install --global dotnet-ef
 RUN dotnet ef --version
 
+# A sandbox created from this image has no way to report which image it came
+# from -- there is no Docker daemon or sbx CLI inside it -- which made #9
+# impossible to pin down: the reported sandboxes carried this image's
+# environment variables while none of its files were on disk, and neither side
+# could prove which rootfs was actually in use.
+#
+# Deliberately the last layer: TEMPLATE_REVISION changes on every commit, so
+# anything after it would rebuild the expensive SDK layers every time.
+USER root
+ARG TEMPLATE_REVISION=unknown
+RUN printf 'revision=%s\nchannel=%s\ndotnet_root=%s\n' \
+        "${TEMPLATE_REVISION}" "${DOTNET_CHANNEL}" "${DOTNET_ROOT}" \
+        > /etc/dotnet-template-version \
+    && chmod 644 /etc/dotnet-template-version
+USER agent
+
 # ENTRYPOINT and CMD are deliberately left to the base image. Overriding
 # ENTRYPOINT to run the cert bootstrap broke sandbox creation outright, so the
 # bootstrap hangs off BASH_ENV instead (see bash-env.sh).
