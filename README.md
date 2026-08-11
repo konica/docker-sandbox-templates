@@ -54,6 +54,36 @@ Scheduled rebuilds run against an unchanged commit, so CI passes
 `IMMUTABLE_SUFFIX` to keep their immutable tag distinct
 (`:10-abc1234-r20260915-42`).
 
+### Publishing is not enough: consumers must run `sbx reset`
+
+`sbx` caches template images on the host. Per Docker's docs, "the first use
+pulls from the registry; subsequent sandboxes reuse the cache. Cached images
+persist across sandbox creation and deletion, and are cleared when you run
+`sbx reset`."
+
+So after republishing to a tag that has been used before, tell consumers to run:
+
+```bash
+sbx reset
+```
+
+Publishing to a **new** tag is documented as avoiding this, so the cache only
+bites when a floating tag such as `:8` or `:10` is republished in place — which
+this repo does on every build.
+
+To tell what a sandbox is actually running, read the marker baked into the
+image:
+
+```bash
+cat /etc/dotnet-template-version
+```
+
+If that file is missing while `DOTNET_DEV_CERT_ENV_FILE` is set, the sandbox has
+this image's configuration but not its filesystem. That is the #9 symptom and
+its cause is still open — note that Docker documents the working invocation as
+`sbx run -t <image> <agent>`, which is not the same as passing `--template` to
+`sbx create`.
+
 ### CI
 
 `.github/workflows/build-push.yml` publishes both tags when a release is
