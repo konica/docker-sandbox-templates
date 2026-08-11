@@ -71,6 +71,13 @@ else
     fail=1
 fi
 
+if [ -r /etc/dotnet-template-version ]; then
+    note "OK   version marker $(tr "\n" " " < /etc/dotnet-template-version)"
+else
+    note "FAIL /etc/dotnet-template-version missing; a sandbox could not report its image"
+    fail=1
+fi
+
 cert="${ASPNETCORE_Kestrel__Certificates__Default__Path:-}"
 if [ -z "${cert}" ]; then
     note "FAIL cert: ASPNETCORE_Kestrel__Certificates__Default__Path is unset"
