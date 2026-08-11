@@ -61,18 +61,15 @@ pulls from the registry; subsequent sandboxes reuse the cache. Cached images
 persist across sandbox creation and deletion, and are cleared when you run
 `sbx reset`."
 
-So after republishing, tell consumers to run:
+So after republishing to a tag that has been used before, tell consumers to run:
 
 ```bash
 sbx reset
 ```
 
-Pushing a new tag is **not** sufficient on its own, and the failure is
-deceptive rather than obvious: a sandbox can come up carrying this image's
-environment variables while none of this image's files are on disk, because the
-configuration is read from the freshly pulled image and the filesystem comes
-from the cache. That combination cost five identical smoke-test reproductions
-in #9 before anyone thought to look at the host.
+Publishing to a **new** tag is documented as avoiding this, so the cache only
+bites when a floating tag such as `:8` or `:10` is republished in place — which
+this repo does on every build.
 
 To tell what a sandbox is actually running, read the marker baked into the
 image:
@@ -82,7 +79,10 @@ cat /etc/dotnet-template-version
 ```
 
 If that file is missing while `DOTNET_DEV_CERT_ENV_FILE` is set, the sandbox has
-this image's configuration but not its filesystem — clear the cache.
+this image's configuration but not its filesystem. That is the #9 symptom and
+its cause is still open — note that Docker documents the working invocation as
+`sbx run -t <image> <agent>`, which is not the same as passing `--template` to
+`sbx create`.
 
 ### CI
 
